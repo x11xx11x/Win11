@@ -6,6 +6,8 @@ set -euo pipefail
 
 # the whole script is read before anything runs, so "curl | bash" works
 main() {
+DIRECT="https://software.download.prss.microsoft.com/dbazure/Windows11_Client_x64_en-us_26300_9457.iso?t=24f9da11-6624-4f86-ade1-198d7bde4ed9&P1=1792942292&P2=602&P3=2&P4=BVRNoPqTBG8t8Ts5aw%2flst536TjVSzYS10cACt%2f3D7hMvvw8IFwFdM2W9AvnZiR0V9OQmFRT8faXhu2GWc8osUZR46M70nTnb34EGZwsA9GKPFh2xpFM6%2fhrSmoEUN1ZPVknorTvSKapG5QXai1ZFFsZu%2bcNULdFW1yWhc0Iyi9DITIu%2fylz%2fwOjXXRGvH0q5Fb5l3mJe0xls%2bcsl6yIwXVzkXSw%2fmGz0tLDy5MBIf7xzk3xxPYZ3q0vO4bK6dVdXt%2f39aaiscOIsT%2bqsCJMXgoMCo%2fVzioq7FLp%2b1f61zPSTgewG7Ny51NXT6acuROQKbfyhPk2PZugP%2f4fNs3%2fxw%3d%3d"
+[[ ${1:-} == http* ]] && DIRECT=$1 && shift
 LANG_NAME=${1:-English (United States)}
 UA="Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
 PAGE="https://www.microsoft.com/en-us/software-download/windows11"
@@ -45,6 +47,12 @@ FREE=$(df --output=avail -B1G "$MNT" | tail -n1 | tr -d ' ')
 (( FREE >= 8 )) || die "Only ${FREE} GB free on the stick, Windows 11 needs about 7 GB."
 say "$FREE GB free on the stick"
 
+URL=""
+if [[ -n $DIRECT ]] && curl -fsI -o /dev/null -A "$UA" "$DIRECT"; then
+    URL=$DIRECT
+    say "Using the download link from the browser"
+else
+[[ -n $DIRECT ]] && say "The saved link has expired, asking Microsoft for a new one"
 say "Asking Microsoft for a download link ($LANG_NAME)"
 SID=$(cat /proc/sys/kernel/random/uuid)
 HTML=$(curl -fsSL -A "$UA" -H "Accept:" "$PAGE") || die "Could not open $PAGE - check the internet."
@@ -63,6 +71,7 @@ LINKS=$(curl -fsS -A "$UA" --referer "$PAGE" "https://www.microsoft.com/software
 grep -q "Sentinel marked this request as rejected" <<<"$LINKS" && die "Microsoft blocked automatic downloads from your IP right now. Download it in a browser: $PAGE"
 URL=$(grep -o '"Uri":"[^"]*"' <<<"$LINKS" | cut -d'"' -f4 | grep -i x64 | head -n1 | sed 's/\\u0026/\&/g' || true)
 [[ -n $URL ]] || die "Microsoft gave no link. Download it in a browser: $PAGE"
+fi
 
 NAME=$(basename "${URL%%\?*}")
 say "Downloading $NAME to the stick (about 7 GB)"
